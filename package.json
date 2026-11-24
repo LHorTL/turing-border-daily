@@ -1,0 +1,42 @@
+{
+  "private": true,
+  "name": "turing-border-daily",
+  "version": "1.0.0",
+  "description": "Turing Border: Daily Check — 60-second daily cyberpunk-noir Turing inspection micro-game for Reddit Devvit Web",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "devvit playtest",
+    "preview:local": "node scripts/preview-local.mjs",
+    "deploy": "npm run test:types && npm test && npm run build && devvit upload",
+    "login": "devvit login",
+    "test:types": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@devvit/start": "0.15.6",
+    "@devvit/web": "0.15.6",
+    "@hono/node-server": "2.1.6",
+    "devvit": "0.15.6",
+    "hono": "4.13.17",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@types/node": "^22.15.0",
+    "@types/react": "19.1.6",
+    "@types/react-dom": "19.1.5",
+    "@vitejs/plugin-react": "6.3.0",
+    "ajv": "^8.17.1",
+    "tailwindcss": "4.3.5",
+    "tsx": "^4.19.4",
+    "typescript": "5.8.3",
+    "vite": "8.3.7",
+    "vitest": "5.1.1"
+  }
+}

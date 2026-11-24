@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --bg-canvas: #ffffff;
+  --surface-subtle: #f7f8fa;
+  --tag-bg: #f3f4f6;
+  --ink: #18181b;
+  --ink-secondary: #52525b;
+  --ink-muted: #8b8d94;
+  --line: #e6e8ec;
+  --line-soft: #f0f1f4;
+
+  --ok-ink: #047857;
+  --ok-bg: #ecfdf5;
+  --ok-border: #a7f3d0;
+  --err-ink: #b91c1c;
+  --err-bg: #fef2f2;
+  --err-border: #fecaca;
+  --warn-ink: #92400e;
+  --warn-bg: #fffbeb;
+  --warn-border: #fde68a;
+
+  --accent: #0f766e;
+  --accent-deep: #115e59;
+  --accent-soft: #f0fdfa;
+  --accent-border: #99f6e4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  background-color: var(--bg-canvas);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono-nums {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
