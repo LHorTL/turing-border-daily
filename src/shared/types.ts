@@ -127,14 +127,14 @@ export interface XRayAutopsy {
 }
 
 export type VerdictDecision = 'PASS' | 'PURGE';
-export type InspectorGrade = 'S' | 'A' | 'B' | 'C';
+export type InspectorGrade = 'S' | 'A' | 'B' | 'C' | 'D' | 'F';
 
 export interface VerdictResult {
   decision: VerdictDecision;
   correct: boolean;
   grade: InspectorGrade;
   score: number;
-  percentile: number;
+  percentile: number | null;
   probesUsed: number;
   verifiedCitations: number;
   xray: XRayAutopsy;

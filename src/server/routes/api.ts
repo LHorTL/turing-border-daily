@@ -293,7 +293,7 @@ export function createApiRouter(runtime: AppRuntime): Hono {
 
     let community;
     let userStats;
-    let percentile: number;
+    let percentile: number | null;
 
     if (!isPractice) {
       const voteRes = await recordDailyCommunityVote(
@@ -315,7 +315,7 @@ export function createApiRouter(runtime: AppRuntime): Hono {
     } else {
       community = await loadCommunityStats(runtime.redis, dateStr);
       userStats = await loadUserStats(runtime.redis, userKey, username);
-      percentile = Math.max(5, 100 - score);
+      percentile = null;
     }
 
     const verdict = evaluateVerdict(
@@ -324,7 +324,8 @@ export function createApiRouter(runtime: AppRuntime): Hono {
       body.decision,
       percentile,
       userStats.streak,
-      isPractice
+      isPractice,
+      community.total
     );
 
     await saveSession(runtime.redis, userKey, dateStr, session);

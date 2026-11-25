@@ -462,7 +462,9 @@ function GameApp() {
                 <h3 className="text-xs font-bold uppercase tracking-wide text-[#52525b]">
                   Inspection Dossier
                 </h3>
-                <span className="text-[11px] text-[#8b8d94]">Click any row to pin for rule check</span>
+                <span className="text-[11px] text-[#8b8d94]">
+                  {session.solved ? 'Verdict locked' : 'Click any row to pin for rule check'}
+                </span>
               </div>
 
               <div className="divide-y divide-[#f0f1f4] text-xs">
@@ -799,16 +801,50 @@ function GameApp() {
                         </strong>
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 mono-nums">
-                      <span className="px-2.5 py-1 rounded-[4px] bg-white border border-[#e6e8ec] text-sm font-extrabold text-[#18181b]">
+                    <div className="flex flex-wrap items-center gap-1.5 mono-nums">
+                      <span
+                        data-testid="verdict-grade-pill"
+                        className="px-2.5 py-1 rounded-[4px] bg-white border border-[#e6e8ec] text-sm font-extrabold text-[#18181b]"
+                      >
                         Grade {verdict.grade}
                       </span>
-                      <span className="px-2 py-1 rounded-[4px] bg-white border border-[#e6e8ec] text-xs font-semibold text-[#52525b]">
-                        Top {verdict.percentile}%
+                      <span
+                        data-testid="verdict-score-pill"
+                        className="px-2 py-1 rounded-[4px] bg-white border border-[#e6e8ec] text-xs font-semibold text-[#18181b]"
+                      >
+                        {verdict.score}/100
                       </span>
-                      <span className="px-2 py-1 rounded-[4px] bg-white border border-[#e6e8ec] text-xs font-semibold text-[#52525b]">
-                        Streak {userStats.streak}
-                      </span>
+                      {data.isPractice ? (
+                        <span
+                          data-testid="verdict-rank-pill"
+                          className="px-2 py-1 rounded-[4px] bg-[#fffbeb] border border-[#fde68a] text-xs font-semibold text-[#92400e]"
+                        >
+                          Practice Archive — Unranked
+                        </span>
+                      ) : verdict.percentile === null ? (
+                        <span
+                          data-testid="verdict-rank-pill"
+                          className="px-2 py-1 rounded-[4px] bg-[#f0fdfa] border border-[#99f6e4] text-xs font-semibold text-[#0f766e]"
+                        >
+                          {community.total <= 1
+                            ? 'First Inspector Today'
+                            : `Ranked among ${community.total} inspectors`}
+                        </span>
+                      ) : (
+                        <span
+                          data-testid="verdict-rank-pill"
+                          className="px-2 py-1 rounded-[4px] bg-white border border-[#e6e8ec] text-xs font-semibold text-[#52525b]"
+                        >
+                          {community.total < 5
+                            ? `Top ${verdict.percentile}% (${community.total} inspectors)`
+                            : `Top ${verdict.percentile}% today`}
+                        </span>
+                      )}
+                      {!data.isPractice && (
+                        <span className="px-2 py-1 rounded-[4px] bg-white border border-[#e6e8ec] text-xs font-semibold text-[#52525b]">
+                          Streak {userStats.streak}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -816,7 +852,7 @@ function GameApp() {
                   <div className="px-4 py-3 space-y-1.5">
                     {community.total > 0 ? (
                       <>
-                        <div className="flex items-center justify-between text-xs mono-nums">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs mono-nums">
                           <span className="font-semibold text-[#18181b]">
                             Community Consensus: PURGE {community.purgePct}% · PASS {community.passPct}%
                           </span>

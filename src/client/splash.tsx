@@ -128,17 +128,24 @@ function SplashApp() {
       </section>
 
       {/* Live Community PASS / PURGE Split */}
-      <section className="space-y-1">
-        <div className="flex items-center justify-between text-[11px] mono-nums">
-          <span className="font-semibold text-[#52525b]">
+      <section className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2 text-[11px] mono-nums tabular-nums">
+          <span className="font-semibold text-[#52525b] truncate">
             {hasVotes
               ? `PURGE ${data.community.purgePct}% · PASS ${data.community.passPct}%`
-              : 'COMMUNITY CONSENSUS · LIVE'}
+              : 'LIVE DAILY CONSENSUS'}
           </span>
-          <span className="text-[#52525b]">
+          <span
+            data-testid="splash-verdict-count"
+            className={`px-2 py-0.5 rounded-[4px] border shrink-0 tabular-nums ${
+              hasVotes
+                ? 'bg-[#f0fdfa] border-[#99f6e4] text-[#0f766e] font-bold'
+                : 'bg-[#f7f8fa] border-[#e6e8ec] text-[#18181b] font-semibold'
+            }`}
+          >
             {hasVotes
-              ? `${data.community.total} ${data.community.total === 1 ? 'inspector' : 'inspectors'}`
-              : 'Be today’s first inspector'}
+              ? `${data.community.total} ${data.community.total === 1 ? 'inspector' : 'inspectors'} ruled today`
+              : "Be today's first inspector"}
           </span>
         </div>
         <div className="w-full h-2 rounded-[4px] bg-[#f3f4f6] border border-[#e6e8ec] overflow-hidden flex">
@@ -164,7 +171,7 @@ function SplashApp() {
       {/* 1-Tap Launch Bar */}
       <footer className="flex items-center justify-between gap-3 pt-1">
         <span className="text-[11px] text-[#52525b] truncate">
-          60s check · 4 probes · R-01–R-06 rules
+          60s · 4 probes · R-01–R-06
         </span>
         <button
           type="button"

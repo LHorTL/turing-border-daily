@@ -9,6 +9,7 @@ import {
   applyCountermoveAction,
   applyProbe,
   buildPublicTelemetry,
+  computeVerdictScore,
   createInitialSession,
   evaluateVerdict,
 } from '../src/server/core/interrogation';
@@ -178,5 +179,138 @@ describe('Deterministic daily case engine & Fog-of-War guarantees', () => {
     expect(synthNaturalVoice).toBeGreaterThan(20);
     expect(synthVoiceAnomalyAfter1Probe).toBeLessThan(synthTotal);
     expect(distinctOpeningPrefixes.size).toBeGreaterThanOrEqual(10);
+  });
+
+  it('hard-caps 0-probe blind guesses at <= 68 (Grade C) and rewards investigated + rule-cited solves with Grade S (>= 90) on both synth and human cases', () => {
+    // 1. Signature SYNTH case (2026-10-01 Chen Mo, R-01 & R-03 violations)
+    const synthCase = generateDailyCase('2026-10-01');
+    expect(synthCase.isSynth).toBe(true);
+    const synthViolations = synthCase.fields.filter((f) => f.isContradiction);
+    expect(synthViolations.length).toBeGreaterThanOrEqual(2);
+
+    // (a) 0-probe, 0-confrontation lucky blind guess on SYNTH
+    const synthBlindSession = createInitialSession(synthCase);
+    const synthBlind = computeVerdictScore(synthBlindSession, synthCase, 'PURGE');
+    expect(synthBlind.correct).toBe(true);
+    expect(synthBlind.score).toBeLessThanOrEqual(68);
+    expect(synthBlind.grade).toBe('C');
+
+    // (b) Thorough 3-probe + verified rule-confronted solve on SYNTH
+    const synthThoroughSession = createInitialSession(synthCase);
+    applyProbe(synthThoroughSession, synthCase, synthCase.quickChips[0]!.question);
+    if (synthThoroughSession.jammedTurns > 0) {
+      applyCountermoveAction(synthThoroughSession, 'ACTIVATE_SHIELD');
+    }
+    applyProbe(synthThoroughSession, synthCase, synthCase.quickChips[1]!.question);
+    applyProbe(synthThoroughSession, synthCase, synthCase.quickChips[2]!.question);
+    applyConfrontCitation(
+      synthThoroughSession,
+      synthCase,
+      synthViolations[0]!.id,
+      synthViolations[0]!.ruleRef
+    );
+    applyConfrontCitation(
+      synthThoroughSession,
+      synthCase,
+      synthViolations[1]!.id,
+      synthViolations[1]!.ruleRef
+    );
+    const synthThorough = computeVerdictScore(synthThoroughSession, synthCase, 'PURGE');
+    expect(synthThorough.correct).toBe(true);
+    expect(synthThorough.score).toBeGreaterThanOrEqual(90);
+    expect(synthThorough.grade).toBe('S');
+    expect(synthThorough.score).toBeGreaterThan(synthBlind.score);
+
+    // (c) Wrong verdict on SYNTH remains <= 35 (Grade D or F)
+    const synthWrongBlind = computeVerdictScore(createInitialSession(synthCase), synthCase, 'PASS');
+    expect(synthWrongBlind.correct).toBe(false);
+    expect(synthWrongBlind.score).toBeLessThanOrEqual(35);
+    expect(['D', 'F']).toContain(synthWrongBlind.grade);
+
+    const synthWrongInvestigated = computeVerdictScore(synthThoroughSession, synthCase, 'PASS');
+    expect(synthWrongInvestigated.correct).toBe(false);
+    expect(synthWrongInvestigated.score).toBeLessThanOrEqual(35);
+    expect(['D', 'F']).toContain(synthWrongInvestigated.grade);
+
+    // 2. Signature HUMAN case (2026-10-04 Lin Jing, R-05 exemptions)
+    const humanCase = generateDailyCase('2026-10-04');
+    expect(humanCase.isSynth).toBe(false);
+    const r05Fields = humanCase.fields.filter((f) => f.isExemption && f.ruleRef === 'R-05');
+    expect(r05Fields.length).toBeGreaterThanOrEqual(1);
+
+    // (a) 0-probe, 0-confrontation lucky blind guess on HUMAN
+    const humanBlindSession = createInitialSession(humanCase);
+    const humanBlind = computeVerdictScore(humanBlindSession, humanCase, 'PASS');
+    expect(humanBlind.correct).toBe(true);
+    expect(humanBlind.score).toBeLessThanOrEqual(68);
+    expect(humanBlind.grade).toBe('C');
+
+    // (b) Thorough 4-probe + R-05 exemption-verified solve on HUMAN
+    const humanThoroughSession = createInitialSession(humanCase);
+    for (const chip of humanCase.quickChips) {
+      applyProbe(humanThoroughSession, humanCase, chip.question);
+    }
+    applyConfrontCitation(humanThoroughSession, humanCase, r05Fields[0]!.id, 'R-05');
+    const humanThorough = computeVerdictScore(humanThoroughSession, humanCase, 'PASS');
+    expect(humanThorough.correct).toBe(true);
+    expect(humanThorough.score).toBeGreaterThanOrEqual(90);
+    expect(humanThorough.grade).toBe('S');
+    expect(humanThorough.score).toBeGreaterThan(humanBlind.score);
+
+    // (c) Wrong verdict on HUMAN remains <= 35 (Grade D or F)
+    const humanWrong = computeVerdictScore(humanThoroughSession, humanCase, 'PURGE');
+    expect(humanWrong.correct).toBe(false);
+    expect(humanWrong.score).toBeLessThanOrEqual(35);
+    expect(['D', 'F']).toContain(humanWrong.grade);
+
+    // 3. Verify scoring invariant holds across 60 consecutive days (both signature & procedural cases)
+    for (let i = 0; i < 60; i += 1) {
+      const dateStr = shiftUtcDate('2026-10-01', i);
+      const c = generateDailyCase(dateStr);
+      const rightDecision = c.isSynth ? 'PURGE' : 'PASS';
+      const wrongDecision = c.isSynth ? 'PASS' : 'PURGE';
+
+      const blind = computeVerdictScore(createInitialSession(c), c, rightDecision);
+      expect(blind.score).toBeLessThanOrEqual(68);
+      expect(blind.grade).toBe('C');
+
+      const investigated = createInitialSession(c);
+      applyProbe(investigated, c, c.quickChips[0]!.question);
+      if (investigated.jammedTurns > 0) {
+        applyCountermoveAction(investigated, 'ACTIVATE_SHIELD');
+      }
+      applyProbe(investigated, c, c.quickChips[1]!.question);
+      const evidenceField = c.fields.find((f) =>
+        c.isSynth ? f.isContradiction : f.isExemption
+      )!;
+      applyConfrontCitation(investigated, c, evidenceField.id, evidenceField.ruleRef);
+
+      const solved = computeVerdictScore(investigated, c, rightDecision);
+      expect(solved.score).toBeGreaterThanOrEqual(90);
+      expect(solved.grade).toBe('S');
+      expect(solved.score).toBeGreaterThan(blind.score);
+
+      const wrong = computeVerdictScore(investigated, c, wrongDecision);
+      expect(wrong.score).toBeLessThanOrEqual(35);
+      expect(['D', 'F']).toContain(wrong.grade);
+    }
+  });
+
+  it('omits fabricated Top N% on Practice Archive and First-Inspector Daily receipts', () => {
+    const secret = generateDailyCase('2026-10-04');
+
+    const archSession = createInitialSession(secret);
+    applyProbe(archSession, secret, secret.quickChips[0]!.question);
+    const archVerdict = evaluateVerdict(archSession, secret, 'PASS', null, 0, true, 0);
+    expect(archVerdict.percentile).toBeNull();
+    expect(archVerdict.receiptText).toContain('Practice Archive — Unranked');
+    expect(archVerdict.receiptText).not.toMatch(/Top\s+\d+%/i);
+
+    const firstDailySession = createInitialSession(secret);
+    applyProbe(firstDailySession, secret, secret.quickChips[0]!.question);
+    const firstDailyVerdict = evaluateVerdict(firstDailySession, secret, 'PASS', null, 1, false, 1);
+    expect(firstDailyVerdict.percentile).toBeNull();
+    expect(firstDailyVerdict.receiptText).toContain('First Inspector Today');
+    expect(firstDailyVerdict.receiptText).not.toMatch(/Top\s+\d+%/i);
   });
 });

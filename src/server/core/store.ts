@@ -198,7 +198,7 @@ export async function recordDailyCommunityVote(
   decision: 'PASS' | 'PURGE',
   correct: boolean,
   score: number
-): Promise<{ community: CommunityStats; percentile: number }> {
+): Promise<{ community: CommunityStats; percentile: number | null }> {
   const bucket = scoreToBucket(score);
   await Promise.all([
     redis.incrBy(dailyKey(dateStr, 'total'), 1),
@@ -217,10 +217,10 @@ export async function recordDailyCommunityVote(
     strictlyHigher += counts[b] ?? 0;
   }
 
-  // Top X% (1..99): lower is better (e.g. Top 12%)
+  // Real community percentile from Redis score buckets; null when <= 1 inspector (never fabricated)
   const percentile =
     totalScored <= 1
-      ? Math.max(5, 100 - score)
+      ? null
       : Math.max(1, Math.min(99, Math.round(((strictlyHigher + 1) / totalScored) * 100)));
 
   const community = await loadCommunityStats(redis, dateStr);

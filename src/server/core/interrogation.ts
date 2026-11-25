@@ -544,12 +544,23 @@ export function formatSpoilerFreeReceipt(params: {
   correct: boolean;
   probesUsed: number;
   citations: CitationRecord[];
-  percentile: number;
+  percentile: number | null;
   streak: number;
   isPractice: boolean;
+  communityTotal?: number;
 }): string {
-  const { caseNumber, dateStr, grade, correct, probesUsed, citations, percentile, streak, isPractice } =
-    params;
+  const {
+    caseNumber,
+    dateStr,
+    grade,
+    correct,
+    probesUsed,
+    citations,
+    percentile,
+    streak,
+    isPractice,
+    communityTotal,
+  } = params;
 
   const pinSquares =
     citations.length > 0
@@ -570,10 +581,21 @@ export function formatSpoilerFreeReceipt(params: {
   const modeTag = isPractice ? 'Archive' : 'Daily';
   const caseStr = String(caseNumber).padStart(3, '0');
 
+  let footerLine: string;
+  if (isPractice) {
+    footerLine = 'Practice Archive — Unranked · Zero spoilers — inspect the checkpoint above!';
+  } else if (percentile === null) {
+    footerLine = `First Inspector Today · Streak ${streak} · Zero spoilers — inspect the checkpoint above!`;
+  } else if (communityTotal !== undefined && communityTotal > 1 && communityTotal < 5) {
+    footerLine = `Top ${percentile}% (${communityTotal} inspectors) · Streak ${streak} · Zero spoilers — inspect the checkpoint above!`;
+  } else {
+    footerLine = `Top ${percentile}% today · Streak ${streak} · Zero spoilers — inspect the checkpoint above!`;
+  }
+
   return [
     `Turing Border · ${modeTag} Check #${caseStr} (${dateStr})`,
     `${outcomeMark} Grade ${grade} · Rules ${pinSquares} · Probes ${probeSquares} (${probesUsed}/${MAX_PROBES})`,
-    `Top ${percentile}% today · Streak ${streak} · Zero spoilers — inspect the checkpoint above!`,
+    footerLine,
   ].join('\n');
 }
 
@@ -588,32 +610,66 @@ export function computeVerdictScore(
   ).length;
   const wrongCitations = session.citations.filter((c) => c.outcome === 'MISMATCH').length;
 
-  let score = correct ? 70 : 15;
-  score += Math.min(20, verifiedCitations * 10);
-  score += Math.max(0, (MAX_PROBES - session.probesUsed) * 3);
-  score -= wrongCitations * 6;
-  if (session.bureauTrust < 85) score -= 5;
-  score = clamp(score, 0, 100);
-
-  let grade: InspectorGrade = 'C';
-  if (correct && verifiedCitations >= 1 && wrongCitations === 0 && session.probesUsed <= 3) {
-    grade = 'S';
-  } else if (correct && (verifiedCitations >= 1 || session.probesUsed <= 2)) {
-    grade = 'A';
-  } else if (correct) {
-    grade = 'B';
+  if (!correct) {
+    let wrongScore = 12;
+    wrongScore += Math.min(12, verifiedCitations * 6);
+    wrongScore += Math.min(8, session.probesUsed * 2);
+    wrongScore -= wrongCitations * 6;
+    if (session.bureauTrust < 85) wrongScore -= 5;
+    const score = clamp(wrongScore, 0, 35);
+    const grade: InspectorGrade = score >= 20 ? 'D' : 'F';
+    return { correct: false, score, grade, verifiedCitations };
   }
 
-  return { correct, score, grade, verifiedCitations };
+  // Genuine investigation (interrogation probes + verified R-01~R-06 citations) is positively rewarded.
+  // A 0-probe, 0-citation blind guess is strictly hard-capped at <= 68 (Grade C).
+  const probeBonus = session.probesUsed === 0 ? 0 : Math.min(18, 6 + session.probesUsed * 4);
+  const citationBonus =
+    verifiedCitations === 0 ? 0 : Math.min(26, 12 + verifiedCitations * 6);
+
+  let score = 58 + probeBonus + citationBonus;
+  score -= wrongCitations * 6;
+  if (session.bureauTrust < 85) score -= 5;
+
+  const isBlindGuess = session.probesUsed === 0 && verifiedCitations === 0;
+  const acceptedBribe = session.pendingBribe?.resolved === 'ACCEPTED';
+
+  if (isBlindGuess) {
+    score = Math.min(score, 68);
+  } else if (
+    session.probesUsed === 0 ||
+    verifiedCitations === 0 ||
+    wrongCitations > 0 ||
+    acceptedBribe
+  ) {
+    // Grade S (90-100) requires active probing, verified rule citations, 0 mismatches, and clean integrity
+    score = Math.min(score, 89);
+  }
+
+  score = clamp(score, 0, 100);
+
+  let grade: InspectorGrade;
+  if (score >= 90) {
+    grade = 'S';
+  } else if (score >= 80) {
+    grade = 'A';
+  } else if (score >= 70) {
+    grade = 'B';
+  } else {
+    grade = 'C';
+  }
+
+  return { correct: true, score, grade, verifiedCitations };
 }
 
 export function evaluateVerdict(
   session: ServerSessionRecord,
   secret: SecretCase,
   decision: VerdictDecision,
-  percentile: number,
+  percentile: number | null,
   streak: number,
-  isPractice: boolean
+  isPractice: boolean,
+  communityTotal?: number
 ): VerdictResult {
   const { correct, score, grade, verifiedCitations } = computeVerdictScore(
     session,
@@ -631,6 +687,7 @@ export function evaluateVerdict(
     percentile,
     streak,
     isPractice,
+    communityTotal,
   });
 
   const result: VerdictResult = {

@@ -6,6 +6,7 @@ import type { AppRuntime } from '../src/server/core/store';
 function createTestRuntime(fixedDateIso = '2026-11-24T12:00:00Z') {
   const kv = new Map<string, string>();
   const submittedComments: Array<{ id: string; text: string }> = [];
+  let activeUser = { userId: 't2_user_42', username: 'inspector_test' };
 
   const runtime: AppRuntime = {
     redis: {
@@ -26,7 +27,7 @@ function createTestRuntime(fixedDateIso = '2026-11-24T12:00:00Z') {
     },
     reddit: {
       async getCurrentUsername() {
-        return 'inspector_test';
+        return activeUser.username;
       },
       async submitComment(opts) {
         submittedComments.push(opts);
@@ -39,13 +40,20 @@ function createTestRuntime(fixedDateIso = '2026-11-24T12:00:00Z') {
     getContext: () => ({
       postId: 't3_daily_post_1',
       subredditName: 'r/TuringBorderTest',
-      userId: 't2_user_42',
-      username: 'inspector_test',
+      userId: activeUser.userId,
+      username: activeUser.username,
     }),
     now: () => new Date(fixedDateIso),
   };
 
-  return { app: createApiRouter(runtime), kv, submittedComments };
+  return {
+    app: createApiRouter(runtime),
+    kv,
+    submittedComments,
+    setUser(userId: string, username: string) {
+      activeUser = { userId, username };
+    },
+  };
 }
 
 describe('Devvit Hono API routes (cold start, Fog-of-War, idempotency, archive isolation)', () => {
@@ -155,7 +163,8 @@ describe('Devvit Hono API routes (cold start, Fog-of-War, idempotency, archive i
     const arch = await archRes.json();
     expect(arch.isPractice).toBe(true);
 
-    // Solve archive case -> must NOT change today's community stats or user daily streak
+    // Solve archive case -> must NOT change today's community stats or user daily streak,
+    // and must return percentile: null with zero fake "Top N%" in receipt!
     const vRes = await app.request('/verdict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -165,6 +174,9 @@ describe('Devvit Hono API routes (cold start, Fog-of-War, idempotency, archive i
     const vJson = await vRes.json();
     expect(vJson.userStats.streak).toBe(0);
     expect(vJson.community.total).toBe(0);
+    expect(vJson.verdict.percentile).toBeNull();
+    expect(vJson.verdict.receiptText).toContain('Practice Archive — Unranked');
+    expect(vJson.verdict.receiptText).not.toMatch(/Top\s+\d+%/i);
 
     // Archive reset allowed
     const resetArch = await app.request('/reset-practice', {
@@ -183,5 +195,70 @@ describe('Devvit Hono API routes (cold start, Fog-of-War, idempotency, archive i
       body: JSON.stringify({ dateStr: '2026-11-24' }),
     });
     expect(resetToday.status).toBe(403);
+  });
+
+  it('returns percentile: null for the first daily inspector and real Redis bucket percentiles for subsequent inspectors', async () => {
+    const { app, setUser } = createTestRuntime('2026-11-25T12:00:00Z');
+    const secret = generateDailyCase('2026-11-25');
+    const correctDecision = secret.isSynth ? 'PURGE' : 'PASS';
+    const targetField = secret.fields.find((f) =>
+      secret.isSynth ? f.isContradiction : f.isExemption
+    )!;
+
+    // Player 1: 0-probe blind guess -> first inspector today (percentile: null, score <= 68, Grade C)
+    setUser('t2_p1', 'blind_guesser');
+    const p1Res = await app.request('/verdict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateStr: '2026-11-25', decision: correctDecision }),
+    });
+    expect(p1Res.status).toBe(200);
+    const p1 = await p1Res.json();
+    expect(p1.community.total).toBe(1);
+    expect(p1.verdict.score).toBeLessThanOrEqual(68);
+    expect(p1.verdict.grade).toBe('C');
+    expect(p1.verdict.percentile).toBeNull();
+    expect(p1.verdict.receiptText).toContain('First Inspector Today');
+    expect(p1.verdict.receiptText).not.toMatch(/Top\s+\d+%/i);
+
+    // Player 2: thorough 2-probe + rule-cited solve -> real Redis percentile beating Player 1
+    setUser('t2_p2', 'thorough_inspector');
+    await app.request('/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateStr: '2026-11-25', question: secret.quickChips[0]!.question }),
+    });
+    await app.request('/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateStr: '2026-11-25', question: secret.quickChips[1]!.question }),
+    });
+    await app.request('/confront', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateStr: '2026-11-25',
+        fieldId: targetField.id,
+        ruleCode: targetField.ruleRef,
+      }),
+    });
+    const p2Res = await app.request('/verdict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateStr: '2026-11-25', decision: correctDecision }),
+    });
+    expect(p2Res.status).toBe(200);
+    const p2 = await p2Res.json();
+    expect(p2.community.total).toBe(2);
+    expect(p2.verdict.score).toBeGreaterThanOrEqual(90);
+    expect(p2.verdict.grade).toBe('S');
+    expect(p2.verdict.percentile).toBe(50); // Real rank #1 of 2 -> Top 50%
+    expect(p2.verdict.receiptText).toContain('Top 50% (2 inspectors)');
+
+    // Splash reflects live Redis count = 2
+    const splashRes = await app.request('/splash');
+    expect(splashRes.status).toBe(200);
+    const splash = await splashRes.json();
+    expect(splash.community.total).toBe(2);
   });
 });
