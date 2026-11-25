@@ -2,6 +2,10 @@
 
 **A 60-second daily cyberpunk-noir Turing inspection micro-game built natively on Reddit Devvit Web (`@devvit/web@0.15.6`).**
 
+- **Live Devvit App (`v0.0.1`)**: https://developers.reddit.com/apps/turing-border-daily
+- **Public Demo Subreddit**: https://www.reddit.com/r/TuringBorderDaily/
+- **Live Playable Daily Post**: https://www.reddit.com/r/TuringBorderDaily/comments/1y4x3kv/turing_border_daily_check_056_20261125_pass_or/
+
 Every day at `00:00 UTC`, every Redditor faces the exact same border checkpoint suspect. Cross-reference their dossier against the **Silent Protocol Border Manual (`R-01`–`R-06`)**, watch the live millimeter-paper **ECG + FFT Ink Polygraph**, run up to **4 interrogation probes** while countering active **EMP polygraph jammers** and **covert bribes**, cite concrete rule violations or human exemptions (`R-05`), and stamp **`APPROVE PASS`** or **`PURGE SYNTH`** to compare your verdict against live subreddit consensus and post a **100% spoiler-free receipt** straight to the Reddit thread.
 
 ---
